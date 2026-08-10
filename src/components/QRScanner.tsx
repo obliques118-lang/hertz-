@@ -14,7 +14,7 @@ export default function QRScanner({ onScan }: QRScannerProps) {
     scanner.start(
       { facingMode: 'environment' },
       { fps: 10, qrbox: 250 },
-      (decodedText) => {
+      (decodedText: string) => {
         // Expect URL like .../receiver?room=XXXXXX
         try {
           const url = new URL(decodedText);

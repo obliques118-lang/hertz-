@@ -1,62 +1,86 @@
-// components/HostDashboard.tsx
-import { useState, useEffect, useRef } from 'react';
-import { Radio, Users, MessageSquare, Music, QrCode } from 'lucide-react';
-import { ref, onValue } from 'firebase/database';
-import { db } from '../firebase';
-import AudioControls from './AudioControls';
-import QRDisplay from './QRDisplay';
+// components/ReceiverDashboard.tsx
+import { useEffect, useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Headphones, Volume2, MessageSquare, Music } from 'lucide-react';
+import { useWebRTC } from '../hooks/useWebRTC';
+import { useClockSync } from '../hooks/useClockSync';
 import ChatBox from './ChatBox';
 import SongSuggestions from './SongSuggestions';
+import QRScanner from './QRScanner';
 
-export default function HostDashboard() {
-  const roomId = useRef(Math.random().toString(36).substring(2, 8).toUpperCase()).current;
-  const [receivers, setReceivers] = useState<string[]>([]);
-  const [showQR, setShowQR] = useState(false);
+export default function ReceiverDashboard() {
+  const [searchParams] = useSearchParams();
+  const roomId = searchParams.get('room') || '';
+  const [connected, setConnected] = useState(false);
+  const [volume, setVolume] = useState(80);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const { remoteStream, connectToHost } = useWebRTC(roomId, false);
+  const { syncedTime } = useClockSync();
 
+  // Connect once we have roomId
   useEffect(() => {
-    const receiversRef = ref(db, `rooms/${roomId}/receivers`);
-    const unsub = onValue(receiversRef, (snap) => {
-      if (snap.exists()) setReceivers(Object.keys(snap.val()));
-      else setReceivers([]);
-    });
-    return () => unsub();
+    if (roomId) connectToHost();
   }, [roomId]);
+
+  // When remote stream arrives, attach to AudioContext
+  useEffect(() => {
+    if (remoteStream && !audioContextRef.current) {
+      const ctx = new AudioContext();
+      const source = ctx.createMediaStreamSource(remoteStream);
+      source.connect(ctx.destination);
+      audioContextRef.current = ctx;
+      ctx.resume();
+      setConnected(true);
+    }
+  }, [remoteStream]);
+
+  // Apply volume
+  useEffect(() => {
+    if (audioContextRef.current) {
+      audioContextRef.current.destination.volume = volume / 100;
+    }
+  }, [volume]);
 
   return (
     <>
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-white/10 backdrop-blur-md">
-            <Radio className="w-6 h-6 text-amber-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Host Control</h1>
-            <p className="text-white/60 text-sm flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5" />
-              {receivers.length} listening
-            </p>
-          </div>
+      <div className="flex items-center gap-3 mb-8">
+        <div className="p-3 rounded-xl bg-white/10 backdrop-blur-md">
+          <Headphones className="w-6 h-6 text-purple-400" />
         </div>
-        <button
-          onClick={() => setShowQR(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white text-sm font-medium transition-colors"
-        >
-          <QrCode className="w-4 h-4" /> Share Invite
-        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-white">Receiver</h1>
+          <p className="text-white/60 text-sm">
+            {connected ? 'Synchronised' : 'Connecting…'} · Room{' '}
+            <span className="font-mono">{roomId}</span>
+          </p>
+        </div>
       </div>
 
-      {/* Audio Controls */}
-      <AudioControls roomId={roomId} />
+      {/* QR Scanner if no roomId provided */}
+      {!roomId && <QRScanner onScan={(id) => window.location.href = `/receiver?room=${id}`} />}
+
+      {/* Volume control (only visible after connection) */}
+      {connected && (
+        <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-5 flex items-center gap-4 mb-8">
+          <Volume2 className="w-5 h-5 text-white/70" />
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={volume}
+            onChange={(e) => setVolume(Number(e.target.value))}
+            className="w-full h-1.5 bg-white/20 rounded-full accent-purple-400 cursor-pointer"
+          />
+          <span className="text-white/70 text-sm w-10 text-right">{volume}%</span>
+        </div>
+      )}
 
       {/* Chat & Song Suggestions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-        <ChatBox roomId={roomId} isHost />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ChatBox roomId={roomId} isHost={false} />
         <SongSuggestions roomId={roomId} />
       </div>
-
-      {/* QR Modal */}
-      {showQR && <QRDisplay roomId={roomId} onClose={() => setShowQR(false)} />}
     </>
   );
 }

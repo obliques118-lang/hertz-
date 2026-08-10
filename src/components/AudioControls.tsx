@@ -1,6 +1,6 @@
 // components/AudioControls.tsx
 import { useState, useRef } from 'react';
-import { Play, Pause, Volume2, Upload, Mic } from 'lucide-react';
+import { Play, Pause, Volume2, Upload, MonitorSpeaker } from 'lucide-react';
 import { ref, set, serverTimestamp } from 'firebase/database';
 import { db } from '../firebase';
 import { useWebRTC } from '../hooks/useWebRTC';
@@ -12,12 +12,12 @@ interface AudioControlsProps {
 export default function AudioControls({ roomId }: AudioControlsProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(80);
-  const [audioSource, setAudioSource] = useState<'file' | 'mic' | null>(null);
+  const [audioSource, setAudioSource] = useState<'file' | 'system' | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const micStreamRef = useRef<MediaStream | null>(null);
+  const systemStreamRef = useRef<MediaStream | null>(null);
   const { startStream } = useWebRTC(roomId, true);
 
-  // ---------- Upload audio file (works everywhere) ----------
+  // ---------- Upload audio file (universal) ----------
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -29,32 +29,35 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
     }
   };
 
-  // ---------- Use microphone (works on all browsers/devices) ----------
-  const startMicrophone = async () => {
+  // ---------- System audio (only Chrome/Edge desktop) ----------
+  const startSystemAudio = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        },
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        audio: true,
+        video: false,
       });
-      micStreamRef.current = stream;
-      setAudioSource('mic');
+      systemStreamRef.current = stream;
+      setAudioSource('system');
     } catch (err) {
       if (err instanceof DOMException && err.name === 'NotAllowedError') {
         alert(
-          'Microphone access denied. Please allow the microphone permission in your browser settings, then try again.'
+          'Permission denied. To share system audio:\n\n' +
+          '• Use Chrome or Edge on a desktop/laptop.\n' +
+          '• Tick the "Share audio" checkbox in the dialog.\n' +
+          '• On other devices, use "Upload Audio" instead.'
         );
-      } else if (err instanceof DOMException && err.name === 'NotFoundError') {
-        alert('No microphone found on this device.');
+      } else if (err instanceof DOMException && err.name === 'NotSupportedError') {
+        alert(
+          'System audio capture is not supported in this browser.\n\n' +
+          'Please use Chrome or Edge on a desktop/laptop, or use the "Upload Audio" button to share a file.'
+        );
       } else {
-        alert('Could not access microphone: ' + err);
+        alert('System audio capture failed. Please use "Upload Audio" instead.');
       }
     }
   };
 
-  // ---------- Play / Pause logic ----------
+  // ---------- Play / Pause ----------
   const togglePlayback = () => {
     if (!audioSource) return;
     const audio = audioRef.current;
@@ -63,21 +66,20 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
       if (audio.paused) {
         audio.play();
         setIsPlaying(true);
-        // Send the audio element’s own stream if available (Chrome)
         const mediaStream = (audio as any).captureStream?.();
         if (mediaStream) startStream(mediaStream);
       } else {
         audio.pause();
         setIsPlaying(false);
       }
-    } else if (audioSource === 'mic' && micStreamRef.current) {
+    } else if (audioSource === 'system' && systemStreamRef.current) {
       if (!isPlaying) {
-        startStream(micStreamRef.current);
+        startStream(systemStreamRef.current);
         setIsPlaying(true);
       } else {
-        // Stop all tracks to "pause" the microphone stream
-        micStreamRef.current.getTracks().forEach((track) => track.stop());
-        micStreamRef.current = null;
+        // Stop system audio tracks when "paused"
+        systemStreamRef.current.getTracks().forEach((track) => track.stop());
+        systemStreamRef.current = null;
         setAudioSource(null);
         setIsPlaying(false);
       }
@@ -89,7 +91,7 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
     });
   };
 
-  // ---------- Volume for uploaded file ----------
+  // ---------- Volume (for uploaded file) ----------
   const handleVolume = (val: number) => {
     setVolume(val);
     if (audioRef.current) audioRef.current.volume = val / 100;
@@ -99,6 +101,7 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
     <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
       {/* Source selection */}
       <div className="flex flex-wrap gap-4">
+        {/* Upload Audio – always works */}
         <button
           onClick={() => document.getElementById('fileUpload')?.click()}
           className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white transition-colors"
@@ -113,16 +116,17 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
           className="hidden"
         />
 
+        {/* System Audio – only on supported browsers */}
         <button
-          onClick={startMicrophone}
+          onClick={startSystemAudio}
           className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white transition-colors"
         >
-          <Mic className="w-5 h-5" /> Microphone
+          <MonitorSpeaker className="w-5 h-5" /> System Audio
         </button>
 
         {audioSource && (
           <span className="self-center text-white/50 text-sm ml-2">
-            Source: {audioSource === 'file' ? 'Audio file' : 'Live microphone'}
+            {audioSource === 'file' ? 'Audio file' : 'System audio'}
           </span>
         )}
       </div>
@@ -142,7 +146,7 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
         </button>
       </div>
 
-      {/* Volume slider (only affects uploaded file audio) */}
+      {/* Volume slider (affects uploaded file; system audio volume is controlled by OS) */}
       <div className="flex items-center gap-4">
         <Volume2 className="w-5 h-5 text-white/70" />
         <input

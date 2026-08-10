@@ -1,0 +1,5 @@
+{
+  "name": "hertz",
+  "private": true,
+  "workspaces": ["server", "client"]
+}

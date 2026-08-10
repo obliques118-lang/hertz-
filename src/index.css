@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Additional glassmorphism utility */
+.glass {
+  @apply backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-xl;
+}

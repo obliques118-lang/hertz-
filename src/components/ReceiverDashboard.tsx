@@ -1,7 +1,7 @@
 // components/ReceiverDashboard.tsx
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Headphones, Volume2, MessageSquare, Music } from 'lucide-react';
+import { Headphones, Volume2 } from 'lucide-react';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useClockSync } from '../hooks/useClockSync';
 import ChatBox from './ChatBox';
@@ -18,12 +18,10 @@ export default function ReceiverDashboard() {
   const { remoteStream, connectToHost } = useWebRTC(roomId, false);
   const { syncedTime } = useClockSync();
 
-  // Connect once we have roomId
   useEffect(() => {
     if (roomId) connectToHost();
   }, [roomId]);
 
-  // When remote stream arrives, attach to AudioContext with GainNode
   useEffect(() => {
     if (remoteStream && !audioContextRef.current) {
       const ctx = new AudioContext();
@@ -39,7 +37,6 @@ export default function ReceiverDashboard() {
     }
   }, [remoteStream]);
 
-  // Update gain when volume changes
   useEffect(() => {
     if (gainNodeRef.current) {
       gainNodeRef.current.gain.value = volume / 100;
@@ -48,7 +45,6 @@ export default function ReceiverDashboard() {
 
   return (
     <>
-      {/* Header */}
       <div className="flex items-center gap-3 mb-8">
         <div className="p-3 rounded-xl bg-white/10 backdrop-blur-md">
           <Headphones className="w-6 h-6 text-purple-400" />
@@ -62,10 +58,8 @@ export default function ReceiverDashboard() {
         </div>
       </div>
 
-      {/* QR Scanner if no roomId provided */}
       {!roomId && <QRScanner onScan={(id) => window.location.href = `/receiver?room=${id}`} />}
 
-      {/* Volume control (only visible after connection) */}
       {connected && (
         <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-5 flex items-center gap-4 mb-8">
           <Volume2 className="w-5 h-5 text-white/70" />
@@ -81,7 +75,6 @@ export default function ReceiverDashboard() {
         </div>
       )}
 
-      {/* Chat & Song Suggestions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChatBox roomId={roomId} isHost={false} />
         <SongSuggestions roomId={roomId} />

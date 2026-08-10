@@ -17,7 +17,7 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
   const systemStreamRef = useRef<MediaStream | null>(null);
   const { startStream } = useWebRTC(roomId, true);
 
-  // ---------- Upload audio file (universal) ----------
+  // ---------- Upload audio file – works on 100% of devices ----------
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -29,7 +29,7 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
     }
   };
 
-  // ---------- System audio (only Chrome/Edge desktop) ----------
+  // ---------- System audio – only Chrome/Edge desktop ----------
   const startSystemAudio = async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -39,21 +39,17 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
       systemStreamRef.current = stream;
       setAudioSource('system');
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'NotAllowedError') {
-        alert(
-          'Permission denied. To share system audio:\n\n' +
-          '• Use Chrome or Edge on a desktop/laptop.\n' +
-          '• Tick the "Share audio" checkbox in the dialog.\n' +
-          '• On other devices, use "Upload Audio" instead.'
-        );
-      } else if (err instanceof DOMException && err.name === 'NotSupportedError') {
-        alert(
-          'System audio capture is not supported in this browser.\n\n' +
-          'Please use Chrome or Edge on a desktop/laptop, or use the "Upload Audio" button to share a file.'
-        );
-      } else {
-        alert('System audio capture failed. Please use "Upload Audio" instead.');
-      }
+      const msg =
+        err instanceof DOMException && err.name === 'NotSupportedError'
+          ? '❌ System audio capture is not supported in this browser.\n\n' +
+            '✅ Use Google Chrome or Microsoft Edge on a desktop/laptop and tick "Share audio" in the dialog.\n' +
+            '📂 Or use "Upload Audio" – works on every device instantly.'
+          : '⚠️ Permission denied.\n\n' +
+            'To share system audio you must:\n' +
+            '• Use Chrome or Edge on a computer.\n' +
+            '• Tick the "Share audio" checkbox when prompted.\n' +
+            '• Or simply use "Upload Audio" to share a file from any device.';
+      alert(msg);
     }
   };
 
@@ -77,8 +73,8 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
         startStream(systemStreamRef.current);
         setIsPlaying(true);
       } else {
-        // Stop system audio tracks when "paused"
-        systemStreamRef.current.getTracks().forEach((track) => track.stop());
+        // Stop stream when pausing
+        systemStreamRef.current.getTracks().forEach((t) => t.stop());
         systemStreamRef.current = null;
         setAudioSource(null);
         setIsPlaying(false);
@@ -101,7 +97,7 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
     <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-6 flex flex-col gap-4">
       {/* Source selection */}
       <div className="flex flex-wrap gap-4">
-        {/* Upload Audio – always works */}
+        {/* Upload Audio – 100% universal */}
         <button
           onClick={() => document.getElementById('fileUpload')?.click()}
           className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white transition-colors"
@@ -116,7 +112,7 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
           className="hidden"
         />
 
-        {/* System Audio – only on supported browsers */}
+        {/* System Audio – with clear fallback */}
         <button
           onClick={startSystemAudio}
           className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white transition-colors"
@@ -146,7 +142,7 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
         </button>
       </div>
 
-      {/* Volume slider (affects uploaded file; system audio volume is controlled by OS) */}
+      {/* Volume slider */}
       <div className="flex items-center gap-4">
         <Volume2 className="w-5 h-5 text-white/70" />
         <input

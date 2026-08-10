@@ -14,6 +14,7 @@ export default function ReceiverDashboard() {
   const [connected, setConnected] = useState(false);
   const [volume, setVolume] = useState(80);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
   const { remoteStream, connectToHost } = useWebRTC(roomId, false);
   const { syncedTime } = useClockSync();
 
@@ -22,22 +23,26 @@ export default function ReceiverDashboard() {
     if (roomId) connectToHost();
   }, [roomId]);
 
-  // When remote stream arrives, attach to AudioContext
+  // When remote stream arrives, attach to AudioContext with GainNode
   useEffect(() => {
     if (remoteStream && !audioContextRef.current) {
       const ctx = new AudioContext();
       const source = ctx.createMediaStreamSource(remoteStream);
-      source.connect(ctx.destination);
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = volume / 100;
+      source.connect(gainNode);
+      gainNode.connect(ctx.destination);
       audioContextRef.current = ctx;
+      gainNodeRef.current = gainNode;
       ctx.resume();
       setConnected(true);
     }
   }, [remoteStream]);
 
-  // Apply volume
+  // Update gain when volume changes
   useEffect(() => {
-    if (audioContextRef.current) {
-      audioContextRef.current.destination.volume = volume / 100;
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = volume / 100;
     }
   }, [volume]);
 

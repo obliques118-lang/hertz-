@@ -30,16 +30,22 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
 
   const startSystemAudio = async () => {
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: false });
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        audio: true,
+        video: false,
+      });
       streamRef.current = stream;
       setAudioSource('system');
     } catch (err) {
-  if (err instanceof DOMException && err.name === 'NotAllowedError') {
-    alert('Permission denied. Please allow screen sharing and enable "Share audio" in the dialog. On mobile, use the "Upload Audio" button instead.');
-  } else {
-    alert('System audio capture failed: ' + err);
-  }
-}
+      if (err instanceof DOMException && err.name === 'NotAllowedError') {
+        alert(
+          'Permission denied. Please allow screen sharing and enable "Share audio" in the dialog. On mobile, use the "Upload Audio" button instead.'
+        );
+      } else {
+        alert('System audio capture failed: ' + err);
+      }
+    }
+  };
 
   const togglePlayback = () => {
     if (!audioSource) return;
@@ -49,13 +55,14 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
     if (audio.paused) {
       audio.play();
       setIsPlaying(true);
-      // Start WebRTC stream
+
       if (audioSource === 'file') {
         const mediaStream = (audio as any).captureStream?.();
         if (mediaStream) startStream(mediaStream);
       } else if (streamRef.current) {
         startStream(streamRef.current);
       }
+
       set(ref(db, `rooms/${roomId}/playback`), {
         action: 'play',
         timestamp: serverTimestamp(),
@@ -80,14 +87,24 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
         >
           <Upload className="w-5 h-5" /> Upload Audio
         </button>
-        <input id="fileUpload" type="file" accept="audio/*" onChange={handleFileUpload} className="hidden" />
+        <input
+          id="fileUpload"
+          type="file"
+          accept="audio/*"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
         <button
           onClick={startSystemAudio}
           className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white transition-colors"
         >
           <Mic className="w-5 h-5" /> System Audio
         </button>
-        {audioSource && <span className="self-center text-white/50 text-sm ml-2">Source: {audioSource}</span>}
+        {audioSource && (
+          <span className="self-center text-white/50 text-sm ml-2">
+            Source: {audioSource}
+          </span>
+        )}
       </div>
 
       {/* Playback controls */}
@@ -97,7 +114,11 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
           disabled={!audioSource}
           className="p-5 rounded-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 shadow-lg shadow-orange-500/25 disabled:opacity-40 transition-all"
         >
-          {isPlaying ? <Pause className="w-8 h-8 text-white" /> : <Play className="w-8 h-8 text-white ml-0.5" />}
+          {isPlaying ? (
+            <Pause className="w-8 h-8 text-white" />
+          ) : (
+            <Play className="w-8 h-8 text-white ml-0.5" />
+          )}
         </button>
       </div>
 

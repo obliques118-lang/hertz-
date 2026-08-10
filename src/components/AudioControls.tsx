@@ -33,10 +33,13 @@ export default function AudioControls({ roomId }: AudioControlsProps) {
       const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: false });
       streamRef.current = stream;
       setAudioSource('system');
-    } catch {
-      alert('Microphone / system audio access denied.');
-    }
-  };
+    } catch (err) {
+  if (err instanceof DOMException && err.name === 'NotAllowedError') {
+    alert('Permission denied. Please allow screen sharing and enable "Share audio" in the dialog. On mobile, use the "Upload Audio" button instead.');
+  } else {
+    alert('System audio capture failed: ' + err);
+  }
+}
 
   const togglePlayback = () => {
     if (!audioSource) return;

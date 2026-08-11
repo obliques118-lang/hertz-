@@ -1,20 +1,18 @@
-// hooks/useClockSync.ts
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ref, onValue } from 'firebase/database';
 import { db } from '../firebase';
 
-export function useClockSync() {
-  const [offset, setOffset] = useState(0);
+export const useClockSync = () => {
+  const [serverOffset, setServerOffset] = useState(0);
 
   useEffect(() => {
-    // Firebase provides server time offset via .info/serverTimeOffset
-    const timeRef = ref(db, '.info/serverTimeOffset');
-    const unsub = onValue(timeRef, (snap) => {
-      if (snap.exists()) setOffset(snap.val());
+    const offsetRef = ref(db, '.info/serverTimeOffset');
+    return onValue(offsetRef, (snap) => {
+      setServerOffset(snap.val() || 0);
     });
-    return () => unsub();
   }, []);
 
-  const syncedTime = () => Date.now() + offset;
-  return { syncedTime };
-}
+  const getSyncedTime = () => Date.now() + serverOffset;
+
+  return { getSyncedTime, serverOffset };
+};

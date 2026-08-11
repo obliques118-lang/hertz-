@@ -13,7 +13,6 @@ export const useWebRTC = (roomId: string, isHost: boolean) => {
   const pc = useRef<RTCPeerConnection | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
-  // Initialize PeerConnection with ICE handling
   const initPC = useCallback(() => {
     const connection = new RTCPeerConnection(iceServers);
 
@@ -35,16 +34,13 @@ export const useWebRTC = (roomId: string, isHost: boolean) => {
     return connection;
   }, [roomId, isHost]);
 
-  // Function for the Host to start broadcasting
   const startStream = async (stream: MediaStream) => {
     const connection = initPC();
     
-    // Add local tracks to the connection
     stream.getTracks().forEach(track => {
       connection.addTrack(track, stream);
     });
 
-    // Create and save Offer
     const offer = await connection.createOffer();
     await connection.setLocalDescription(offer);
     await set(ref(db, `rooms/${roomId}/offer`), { 
@@ -52,31 +48,29 @@ export const useWebRTC = (roomId: string, isHost: boolean) => {
       type: offer.type 
     });
 
-    // Listen for Answers from Receivers
     onValue(ref(db, `rooms/${roomId}/answer`), async (snapshot) => {
       const answer = snapshot.val();
-      if (answer && connection.signalingState !== 'stable') {
+      // We check for 'have-local-offer' because that's the state after the host sets its own offer
+      if (answer && connection.signalingState === 'have-local-offer') {
         await connection.setRemoteDescription(new RTCSessionDescription(answer));
       }
     });
 
-    // Listen for Receiver ICE Candidates
     onChildAdded(ref(db, `rooms/${roomId}/iceCandidates/receiver`), (snapshot) => {
       const candidate = snapshot.val();
-      if (candidate) {
-        connection.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+      if (candidate && connection.remoteDescription) {
+        connection.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
       }
     });
   };
 
-  // Function for the Receiver to connect
   const connectToHost = useCallback(async () => {
     const connection = initPC();
 
-    // Listen for Host Offer
     onValue(ref(db, `rooms/${roomId}/offer`), async (snapshot) => {
       const offer = snapshot.val();
-      if (offer && connection.signalingState === 'new') {
+      // 'stable' is the correct initial state for a receiver waiting for an offer
+      if (offer && connection.signalingState === 'stable') {
         await connection.setRemoteDescription(new RTCSessionDescription(offer));
         const answer = await connection.createAnswer();
         await connection.setLocalDescription(answer);
@@ -87,19 +81,20 @@ export const useWebRTC = (roomId: string, isHost: boolean) => {
       }
     });
 
-    // Listen for Host ICE Candidates
     onChildAdded(ref(db, `rooms/${roomId}/iceCandidates/host`), (snapshot) => {
       const candidate = snapshot.val();
-      if (candidate) {
-        connection.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+      if (candidate && connection.remoteDescription) {
+        connection.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
       }
     });
   }, [initPC, roomId]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      pc.current?.close();
+      if (pc.current) {
+        pc.current.close();
+        pc.current = null;
+      }
     };
   }, []);
 

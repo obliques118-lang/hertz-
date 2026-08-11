@@ -2,7 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Additional glassmorphism utility */
-.glass {
-  @apply backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl shadow-xl;
+body {
+  @apply bg-black min-h-screen overflow-hidden;
+  background: radial-gradient(circle at top left, #1e1b4b, #000000);
+}
+
+.glass-panel {
+  @apply bg-white/5 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)];
+}
+
+/* Custom range slider for the audio feel */
+input[type='range']::-webkit-slider-thumb {
+  @apply appearance-none w-4 h-4 bg-white rounded-full shadow-lg border-2 border-indigo-500;
 }

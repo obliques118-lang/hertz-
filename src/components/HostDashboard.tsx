@@ -7,9 +7,12 @@ import AudioControls from './AudioControls';
 import QRDisplay from './QRDisplay';
 import ChatBox from './ChatBox';
 import SongSuggestions from './SongSuggestions';
+import YouTubePlayer from './YouTubePlayer';
 
 export default function HostDashboard() {
-  const roomId = useRef(Math.random().toString(36).substring(2, 8).toUpperCase()).current;
+  const roomId = useRef(
+    Math.random().toString(36).substring(2, 8).toUpperCase()
+  ).current;
   const [receivers, setReceivers] = useState<string[]>([]);
   const [showQR, setShowQR] = useState(false);
 
@@ -46,8 +49,13 @@ export default function HostDashboard() {
         </button>
       </div>
 
-      {/* Audio Controls */}
+      {/* Audio Controls (Upload / System Audio) */}
       <AudioControls roomId={roomId} />
+
+      {/* YouTube Player */}
+      <div className="mt-6">
+        <YouTubePlayer />
+      </div>
 
       {/* Chat & Song Suggestions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">

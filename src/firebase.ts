@@ -1,10 +1,8 @@
-// src/firebase.ts
-import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, onValue, push, serverTimestamp } from "firebase/database";
-import { getAnalytics } from "firebase/analytics";
+import { initializeApp } from 'firebase/app';
+import { getDatabase, ref, onValue, set, push, onChildAdded } from 'firebase/database';
 
-// Your web app's Firebase configuration (hardcoded for development)
 const firebaseConfig = {
+  // Replace with your Firebase config
   apiKey: "AIzaSyAXxdZ7evN9n69L8KXJVKlbMZfsCc5ORiU",
   authDomain: "hertz-da7ba.firebaseapp.com",
   projectId: "hertz-da7ba",
@@ -14,8 +12,5 @@ const firebaseConfig = {
   measurementId: "G-B3XCCNS9NB"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
-export const analytics = getAnalytics(app);
-export { ref, set, onValue, push, serverTimestamp };

@@ -1,61 +1,107 @@
-import { useEffect, useRef } from 'react';
-import { ref, set, onChildAdded, push } from 'firebase/database';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { ref, set, onChildAdded, onValue, push } from 'firebase/database';
 import { db } from '../firebase';
 
-const iceServers = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+const iceServers = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ]
+};
 
 export const useWebRTC = (roomId: string, isHost: boolean) => {
-  const pc = useRef<RTCPeerConnection>(new RTCPeerConnection(iceServers));
-  const localStream = useRef<MediaStream | null>(null);
+  const pc = useRef<RTCPeerConnection | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
-  const startHost = async (stream: MediaStream) => {
-    localStream.current = stream;
-    stream.getTracks().forEach(track => pc.current.addTrack(track, stream));
+  // Initialize PeerConnection with ICE handling
+  const initPC = useCallback(() => {
+    const connection = new RTCPeerConnection(iceServers);
 
-    pc.current.onicecandidate = (event) => {
+    connection.onicecandidate = (event) => {
       if (event.candidate) {
-        push(ref(db, `rooms/${roomId}/iceCandidates/host`), event.candidate.toJSON());
+        const path = isHost ? 'host' : 'receiver';
+        const candidatesRef = ref(db, `rooms/${roomId}/iceCandidates/${path}`);
+        push(candidatesRef, event.candidate.toJSON());
       }
     };
 
-    const offer = await pc.current.createOffer();
-    await pc.current.setLocalDescription(offer);
-    await set(ref(db, `rooms/${roomId}/offer`), { sdp: offer.sdp, type: offer.type });
+    connection.ontrack = (event) => {
+      if (!isHost && event.streams && event.streams[0]) {
+        setRemoteStream(event.streams[0]);
+      }
+    };
 
-    // Listen for Answer
+    pc.current = connection;
+    return connection;
+  }, [roomId, isHost]);
+
+  // Function for the Host to start broadcasting
+  const startStream = async (stream: MediaStream) => {
+    const connection = initPC();
+    
+    // Add local tracks to the connection
+    stream.getTracks().forEach(track => {
+      connection.addTrack(track, stream);
+    });
+
+    // Create and save Offer
+    const offer = await connection.createOffer();
+    await connection.setLocalDescription(offer);
+    await set(ref(db, `rooms/${roomId}/offer`), { 
+      sdp: offer.sdp, 
+      type: offer.type 
+    });
+
+    // Listen for Answers from Receivers
     onValue(ref(db, `rooms/${roomId}/answer`), async (snapshot) => {
       const answer = snapshot.val();
-      if (answer && !pc.current.currentRemoteDescription) {
-        await pc.current.setRemoteDescription(new RTCSessionDescription(answer));
+      if (answer && connection.signalingState !== 'stable') {
+        await connection.setRemoteDescription(new RTCSessionDescription(answer));
+      }
+    });
+
+    // Listen for Receiver ICE Candidates
+    onChildAdded(ref(db, `rooms/${roomId}/iceCandidates/receiver`), (snapshot) => {
+      const candidate = snapshot.val();
+      if (candidate) {
+        connection.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
       }
     });
   };
 
-  const joinRoom = async (onTrack: (stream: MediaStream) => void) => {
-    pc.current.ontrack = (event) => onTrack(event.streams[0]);
+  // Function for the Receiver to connect
+  const connectToHost = useCallback(async () => {
+    const connection = initPC();
 
-    pc.current.onicecandidate = (event) => {
-      if (event.candidate) {
-        push(ref(db, `rooms/${roomId}/iceCandidates/receiver`), event.candidate.toJSON());
-      }
-    };
-
-    // Get Offer
+    // Listen for Host Offer
     onValue(ref(db, `rooms/${roomId}/offer`), async (snapshot) => {
       const offer = snapshot.val();
-      if (offer) {
-        await pc.current.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await pc.current.createAnswer();
-        await pc.current.setLocalDescription(answer);
-        await set(ref(db, `rooms/${roomId}/answer`), { sdp: answer.sdp, type: answer.type });
+      if (offer && connection.signalingState === 'new') {
+        await connection.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await connection.createAnswer();
+        await connection.setLocalDescription(answer);
+        await set(ref(db, `rooms/${roomId}/answer`), { 
+          sdp: answer.sdp, 
+          type: answer.type 
+        });
       }
     });
 
-    // Listen for ICE Candidates from Host
+    // Listen for Host ICE Candidates
     onChildAdded(ref(db, `rooms/${roomId}/iceCandidates/host`), (snapshot) => {
-      pc.current.addIceCandidate(new RTCIceCandidate(snapshot.val()));
+      const candidate = snapshot.val();
+      if (candidate) {
+        connection.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+      }
     });
-  };
+  }, [initPC, roomId]);
 
-  return { startHost, joinRoom };
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      pc.current?.close();
+    };
+  }, []);
+
+  return { startStream, connectToHost, remoteStream };
 };
